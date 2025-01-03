@@ -56,10 +56,15 @@ int main()
 			}
 			if (c != 'y')
 				break;
-			std::cout << "Enter the tag id of node to be edited: ";
+			std::cout << "Enter the tag id of node to be edited (i.e. 0123 0FFF, q to quit): ";
 			std::string id;
 			Uint16 g, e;
 			std::cin >>std::hex >> g >> e;
+			if (g == 'q') {
+				delete t;
+				delete tt;
+				return 0;
+			}
 			std::cout << "Enter the new value of the node: ";
 			std::string value;
 			std::cin >> value;
