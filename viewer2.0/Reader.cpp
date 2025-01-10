@@ -5,7 +5,7 @@ Reader::Reader(const char* path)
 {
 }
 
-int Reader::fopen()
+int Reader::openFile()
 {
 	OFCondition status = fileFormat.loadFile(filePath);
 	if (status.bad()) {
@@ -15,19 +15,6 @@ int Reader::fopen()
 	metainfo = fileFormat.getMetaInfo();
 	dataset = fileFormat.getDataset();
 	return 0;
-}
-
-Tree* Reader::loadMetainfo() {
-	return load(metainfo);
-}
-
-Tree* Reader::loadDataset() {
-	return load(dataset);
-}
-
-void Reader::dump(std::ofstream& fout)
-{
-	fileFormat.print(fout);
 }
 
 Tree* Reader::load(DcmItem* container)
@@ -74,23 +61,24 @@ Tree* Reader::load(DcmItem* container)
 	return t;
 }
 
-void Reader::retrieveValues(Tree* tree)
+void Reader::retrieveValues(Tree* tree, CONTAINER_TYPE c)
 {
+	DcmItem* container = getContainer(c);
 	std::stack<TreeNode*> nodes{};
 	for (auto& i : tree->getRoot()->children)
 		nodes.push(i);
 	while (!nodes.empty()) {
 		TreeNode* currentNode = nodes.top();
 		nodes.pop();
-		retrieveValue(tree, currentNode);
+		retrieveValue(tree, currentNode, container);
 		for (auto& i : currentNode->children)
 			nodes.push(i);
 	}
 }
 
-void Reader::retrieveValue(Tree* tree, TreeNode* node)
+void Reader::retrieveValue(Tree* tree, TreeNode* node, DcmItem* c)
 {
-	DcmItem* item = findContainerOfNode(tree, node);
+	DcmItem* item = findContainerOfNode(tree, node, c);
 	if (item == nullptr) {
 		std::cerr << "The container of the node with description \'" << node->description << "\' was not found!\n";
 		return;
@@ -126,7 +114,7 @@ void Reader::retrieveValue(Tree* tree, TreeNode* node)
 	}
 }
 
-DcmItem* Reader::findContainerOfNode(Tree* tree, TreeNode* node) {
+DcmItem* Reader::findContainerOfNode(Tree* tree, TreeNode* node, DcmItem* initialContainer) {
 	std::vector<TreeNode*> path = tree->findPathToRootFrom(node);
 	if (path.empty()) {
 		std::cerr << "No path found from root to \'" << node->description << '\'\n';
@@ -138,9 +126,9 @@ DcmItem* Reader::findContainerOfNode(Tree* tree, TreeNode* node) {
 
 	//[NOTE] the node is a direct child of the root, the container is the dataset itself
 	if (path.size() <= 1)
-		return dataset;
+		return initialContainer;
 
-	DcmItem* item = dataset;
+	DcmItem* item = initialContainer;
 
 	//[ASSUMPTION] sequence nodes are paired with item nodes
 	//[UNTESTED] [POSSIBLE CRASH CAUSE] sequences that contain sequence delimiters (unspecified length)
@@ -149,7 +137,7 @@ DcmItem* Reader::findContainerOfNode(Tree* tree, TreeNode* node) {
 	TreeNode* itNode = *(i++);
 
 	//[NOTE] findIndexOfChild() must return valid index because the node was stored in the path to the root
-	OFCondition status = dataset->findAndGetSequenceItem(sqNode->tag, item, sqNode->findIndexOfChild(itNode));
+	OFCondition status = initialContainer->findAndGetSequenceItem(sqNode->tag, item, sqNode->findIndexOfChild(itNode));
 	while (i != path.rend() && i + 1 != path.rend()) {
 		sqNode = *(i++);
 		itNode = *(i++);
@@ -160,4 +148,16 @@ DcmItem* Reader::findContainerOfNode(Tree* tree, TreeNode* node) {
 		}
 	}
 	return item;
+}
+
+DcmItem* Reader::getContainer(CONTAINER_TYPE c)
+{
+	switch (c)
+	{
+	case DATASET:
+		return dataset;
+	case METAINFO:
+		return metainfo;
+	}
+	return nullptr;
 }

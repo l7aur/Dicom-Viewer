@@ -1,6 +1,6 @@
 #include "Writer.hpp"
 
-void Writer::save(std::unique_ptr<DcmFileFormat> ff, DcmMetaInfo* mi, const char* path)
+void Writer::save(std::unique_ptr<DcmFileFormat> ff, const char* path)
 {
 	if (ff == nullptr) {
 		std::cerr << "DcmFileFormat does not exist!\n";
@@ -11,4 +11,5 @@ void Writer::save(std::unique_ptr<DcmFileFormat> ff, DcmMetaInfo* mi, const char
 		return;
 	}
 	ff->saveFile(path, EXS_LittleEndianExplicit);
+	//ff->saveFile(path);
 }

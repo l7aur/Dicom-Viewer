@@ -1,96 +1,108 @@
 #include "Editor.hpp"
 
 namespace {
-	unsigned int convertHexa2Decimal(char c) {
+	Uint8 charToDigit(char  c)
+	{
 		switch (c)
 		{
-		case '0':case '1':case '2':case '3':case '4': case '5':
-		case '6':case '7': case '8': case '9':
-			return c - '0';
-		case 'a':
-			return 10;
-		case 'b':
-			return 11;
-		case 'c':
-			return 12;
-		case 'd':
-			return 13;
-		case 'e':
-			return 14;
-		case 'f':
-			return 15;
-		default:
-			return 0;
+		case '0': return 0x00;
+		case '1': return 0x01;
+		case '2': return 0x02;
+		case '3': return 0x03;
+		case '4': return 0x04;
+		case '5': return 0x05;
+		case '6': return 0x06;
+		case '7': return 0x07;
+		case '8': return 0x08;
+		case '9': return 0x09;
+		case 'a': return 0x0A;
+		case 'b': return 0x0B;
+		case 'c': return 0x0C;
+		case 'd': return 0x0D;
+		case 'e': return 0x0E;
+		case 'f': return 0x0F;
+		default: return 0x00;
 		}
 	}
+	Uint8 convertHexa2Decimal(char n1, char n0) {
+		return (charToDigit(n1) << 4) + charToDigit(n0);
+	}
+	
 }
 
-void Editor::update(DcmTag tag, const char* newValue)
+void Editor::update(std::vector<DcmTag> tags, std::vector<int> itemNos, const char* newValue)
 {
-	std::queue<TreeNode*> q;
-	q.push(tree->getRoot());
-	while (!q.empty()) {
-		TreeNode* currentNode = q.front();
-		q.pop();
-		if (currentNode->tag == tag) {
-			if (currentNode->description == "Item" || strstr(currentNode->description.c_str(), "Sequence")) {
-				std::cerr << "It is impossible to change the value for \'" << currentNode->description << "\'\n";
-				return;
-			}
-			std::cout << "Replaced \'" << currentNode->value << "\' with \'" << newValue << "\'\n";
-			currentNode->value = newValue;
+	int itemI = 0;
+	TreeNode* currentNode = datasetTree->getRoot();
+	for (int index = 0; index < tags.size(); index++) {
+		TreeNode* childNode = nullptr;
+		if (tags.at(index) == DCM_ItemTag) {
+			currentNode = currentNode->children.at(itemNos.at(itemI++));
+			continue;
 		}
-		for (auto& i : currentNode->children)
-			q.push(i);
+		for (auto& childNode : currentNode->children) {
+			if (tags.at(index) == childNode->tag) {
+				if (index == tags.size() - 1) {
+					if (childNode->description == "Item" || strstr(childNode->description.c_str(), "Sequence")) {
+						std::cerr << "It is impossible to change the value for \'" << childNode->description << "\'\n";
+						return;
+					}
+					std::cout << "Replaced \'" << childNode->value << "\' with \'" << newValue << "\'\n";
+					childNode->value = newValue;
+					return;
+				}
+				currentNode = childNode;
+				break;
+			}
+		}
 	}
+	std::cerr << "The node was not found!\n";
 }
 
 std::unique_ptr<DcmFileFormat> Editor::getFileFormat()
 {
 	std::unique_ptr<DcmFileFormat> fileFormat = std::make_unique<DcmFileFormat>();
 	DcmDataset* dataSet = fileFormat->getDataset();
-	TreeNode* currentNode = tree->getRoot();
+	TreeNode* currentNode = datasetTree->getRoot();
 	std::queue<TreeNode*> q;
+	bool isTest{ true };
 	for (auto& i : currentNode->children)
 		q.push(i);
 	while (!q.empty()) {
 		currentNode = q.front();
 		q.pop();
 		if (currentNode->vr.getEVR() == EVR_SQ) {
-			//addTreeNodeSequenceToDataset(currentNode, dataSet); 
+			addTreeNodeSequenceToDataset(currentNode, dataSet);
 			continue;
 		}
 		addTreeNodeDataToDataset(currentNode, dataSet);
 		for (auto& i : currentNode->children)
 			q.push(i);
 	}
-	fileFormat->print(COUT);
 	return fileFormat;
 }
 
 void Editor::addTreeNodeSequenceToDataset(TreeNode* node, DcmItem* container) {
 	for (auto& itemNode : node->children) {
-		DcmItem* item = new DcmItem(itemNode->tag);
+		std::unique_ptr<DcmItem> item = std::make_unique<DcmItem>();
 		for (auto& n : itemNode->children) {
 			//[NOTE] recursive callback
 			if (itemNode->vr.getEVR() == EVR_SQ)
-				addTreeNodeSequenceToDataset(n, item);
-			addTreeNodeDataToDataset(n, item);
+				addTreeNodeSequenceToDataset(n, item.get());
+			addTreeNodeDataToDataset(n, item.get());
 		}
-		/*DcmStack stack; //debug
-		while (item->nextObject(stack, OFTrue).good())
-			COUT << OFString(stack.card(), '>') << stack.top()->getTag() << " " << DcmVR(stack.top()->getVR()).getVRName() << OFendl;
-		std::cout << '\n';*/
-		OFCondition status = container->insertSequenceItem(node->tag, item);
-		if (status.bad()) 
-			std::cerr << "insertSequenceItem() failed for \'" << node->description << "\'\n";
-		delete item;
+		OFCondition status = container->insertSequenceItem(node->tag, item.get());
+		if (status.good()) {
+			item.release();
+			continue;
+		}
+		std::cerr << "insertSequenceItem() failed for \'" << node->description << "\'\n";
 	}
 }
 
-void Editor::addTreeNodeDataToDataset(TreeNode* node, DcmItem* dataSet) {
+void Editor::addTreeNodeDataToDataset(TreeNode* node, DcmItem* container) {
 
-	DcmItem* item = dataSet;
+	DcmItem* item = container;
 	if (item == nullptr) {
 		std::cerr << "The container of the node with description \'" << node->description << "\' was not found!\n";
 		return;
@@ -113,7 +125,7 @@ void Editor::addTreeNodeDataToDataset(TreeNode* node, DcmItem* dataSet) {
 		return;
 	}
 	case EVR_AT: {
-		handleAT(item, node);
+		handleAT(node, item);
 		return;
 	}
 	case EVR_FL:case EVR_OF: {
@@ -152,9 +164,7 @@ void Editor::addTreeNodeDataToDataset(TreeNode* node, DcmItem* dataSet) {
 		(node->value.size() > 2 && node->value.at(2) == '/') ? handleOB(node, item) : handleOW(node, item);
 		return;
 	}
-	case EVR_SQ:
-		return;
-	case EVR_na:
+	case EVR_SQ:case EVR_na:
 		return;
 	case EVR_lt:case EVR_up:case EVR_item:case EVR_metainfo:case EVR_dataset:
 	case EVR_fileFormat:case EVR_dicomDir:case EVR_dirRecord:case EVR_pixelSQ:
@@ -163,7 +173,7 @@ void Editor::addTreeNodeDataToDataset(TreeNode* node, DcmItem* dataSet) {
 		std::cerr << "Unhandled!\n";
 		return;
 	default:
-		std::cerr << "default switch branch called!\n";
+		std::cerr << "You should not be able to reach this!\n";
 		return;
 	}
 }
@@ -178,18 +188,14 @@ void Editor::handleDefault(TreeNode* node, DcmItem* item)
 
 void Editor::handleOW(TreeNode* node, DcmItem* item)
 {
-	Uint16* data = new Uint16[node->value.size() / 4];
+	Uint16* data = new Uint16[500'000];
 	unsigned long c = 0;
 	for (size_t i = 0; i < node->value.size(); i += 5) {
-		if (c > node->value.size() / 4 - 1) {
+		if (c > 499'999) {
 			std::cerr << "Buffer overflow!\n";
 			break;
 		}
-		data[c++] =
-			convertHexa2Decimal(node->value[i]) * 16 * 16 * 16 +
-			convertHexa2Decimal(node->value[i + 1]) * 16 * 16 +
-			convertHexa2Decimal(node->value[i + 2]) * 16 +
-			convertHexa2Decimal(node->value[i + 3]);
+		data[c++] = (convertHexa2Decimal(node->value[i], node->value[i + 1]) << 8) + convertHexa2Decimal(node->value[i + 2], node->value[i + 3]);
 	}
 	OFCondition status = item->putAndInsertUint16Array(node->tag, data, c);
 	if (status.bad())
@@ -197,7 +203,7 @@ void Editor::handleOW(TreeNode* node, DcmItem* item)
 	delete[] data;
 }
 
-void Editor::handleAT(DcmItem* item, TreeNode* node)
+void Editor::handleAT(TreeNode* node, DcmItem* item)
 {
 	OFCondition status = item->putAndInsertString(node->tag, node->value.c_str());
 	if (status.bad())
@@ -334,10 +340,10 @@ void Editor::handleOL_UL(TreeNode* node, DcmItem* item)
 
 void Editor::handleOB(TreeNode* node, DcmItem* item)
 {
-	Uint8* data = new Uint8[100'000]{ 0 };
+	Uint8* data = new Uint8[500'000]{ 0 };
 	unsigned long c = 0;
 	for (auto& i : node->value) {
-		if (c > 99'999) {
+		if (c > 499'999) {
 			std::cerr << "Buffer overflow!\n";
 			break;
 		}

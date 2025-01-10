@@ -11,16 +11,16 @@
 
 class Editor {
 public:
-	Editor() {};
-	Editor(Tree* t) : tree(t) {};
+	Editor(Tree* miTree, Tree* dTree) { datasetTree = dTree; metainfoTree = miTree; };
 	~Editor() {};
-	void update(DcmTag tag, const char* newValue);
+	void update(std::vector<DcmTag> tags, std::vector<int> itemNos, const char* newValue);
 	std::unique_ptr<DcmFileFormat> getFileFormat();
 private:
-	void addTreeNodeDataToDataset(TreeNode* node, DcmItem* dataSet);
+	void addTreeNodeSequenceToDataset(TreeNode* node, DcmItem* container);
+	void addTreeNodeDataToDataset(TreeNode* node, DcmItem* container);
 	void handleDefault(TreeNode* node, DcmItem* item);
 	void handleOW(TreeNode* node, DcmItem* item);
-	void handleAT(DcmItem* item, TreeNode* node);
+	void handleAT(TreeNode* node, DcmItem* item);
 	void handleFL_OF(TreeNode* node, DcmItem* item);
 	void handleFD_OD(TreeNode* node, DcmItem* item);
 	void handleSS(TreeNode* node, DcmItem* item);
@@ -28,6 +28,6 @@ private:
 	void handleOB(TreeNode* node, DcmItem* item);
 	void handleSL(TreeNode* node, DcmItem* item);
 	void handleUS(TreeNode* node, DcmItem* item);
-	void addTreeNodeSequenceToDataset(TreeNode* node, DcmItem* dataSet);
-	Tree* tree{ nullptr };
+	Tree* datasetTree{ nullptr };
+	Tree* metainfoTree{ nullptr };
 };

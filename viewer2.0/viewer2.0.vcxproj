@@ -144,17 +144,10 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Editor.hpp" />
-    <ClInclude Include="main.h" />
     <ClInclude Include="Reader.hpp" />
     <ClInclude Include="Tree.hpp" />
     <ClInclude Include="TreeNode.hpp" />
     <ClInclude Include="Writer.hpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="gura.dcm" />
-    <None Include="more_items_in_sq.dcm" />
-    <None Include="online_test.dcm" />
-    <None Include="test3.dcm" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="dump_res.txt" />

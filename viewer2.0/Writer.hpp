@@ -9,6 +9,6 @@ class Writer {
 public:
 	Writer() {};
 	~Writer() {};
-	void save(std::unique_ptr<DcmFileFormat> ff, DcmMetaInfo* mi, const char* path);
+	void save(std::unique_ptr<DcmFileFormat> ff, const char* path);
 private:
 };

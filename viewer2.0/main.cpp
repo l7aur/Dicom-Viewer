@@ -1,100 +1,151 @@
 #include "Reader.hpp"
 #include "Editor.hpp"
 #include "Writer.hpp"
-#include "main.h"
-#include "fstream"
+
+const char* paths[] = {
+	"tests/test1.dcm",
+	"tests/test2.dcm",
+	"tests/test3.dcm",
+	"tests/test4.dcm",
+	"tests/more_items_in_sq.dcm",
+	"tests/online_test.dcm",
+	"tests/gura.dcm",
+	"C:/Users/user/Desktop/output.dcm" // default path to save file 
+};
+const char* defaultPath = "C:/Users/user/Desktop/output.dcm";
+
+static Reader initReader();
+static Tree* buildTree(Reader& r, CONTAINER_TYPE c);
+static void printFileStructure(Tree* miset, Tree* dset);
+static char doYouWantToExit(Tree* t1, Tree* t2);
+static std::string fetchNewValue();
+static std::pair<std::vector<DcmTag>, std::vector<int>> fetchPathToNode();
+static void printPathToAffectedNode(std::pair<std::vector<DcmTag>, std::vector<int>> path);
+static void cleanup(Tree* t1, Tree* t2);
+static void exit(Tree* t1, Tree* t2);
 
 int main()
 {
-	std::ofstream f("./dump_res.txt");
 	while (1) {
-		const char* paths[] = {
-			"./test3.dcm",
-			"./more_items_in_sq.dcm",
-			"./online_test.dcm",
-			"./gura.dcm",
-			"C:/Users/user/Desktop/output.dcm"
-		};
-		char pathI = 0;
-
-		//[NOTE] Load a file
-		for (int i = 0; i < sizeof(paths) / sizeof(const char*); ++i)
-			std::cout << i << ". " << paths[i] << '\n';
-		std::cout << "\nInsert a number between 0 and " << sizeof(paths) / sizeof(const char*) - 1 << " or q: ";
-		std::cin >> pathI;
-		if (pathI == 'q' || pathI < '0' || pathI > '9')
-			return 0;
-
-		Reader fin(paths[pathI - '0']);
-		if (fin.fopen() < 0) {
+		Reader reader = initReader();
+		if (reader.openFile() < 0) {
 			std::cerr << "Unable to open file\n";
 			continue;
 		}
 
-		//fin.dump(f); /*debug*/
+		Tree* datasetTree = buildTree(reader, CONTAINER_TYPE::DATASET);
+		Tree* metainfoTree = buildTree(reader, CONTAINER_TYPE::METAINFO);
 
-		//[NOTE] Convert DcmFileFormat into Tree
-		Tree* t = fin.loadDataset();
-		Tree* tt = fin.loadMetainfo();
-		fin.retrieveValues(t);
-		fin.retrieveValues(tt);
+		// [NOTE] Print the tree to check if the values have been retrieved
+		printFileStructure(metainfoTree, datasetTree);
 
-		//[NOTE] Print the tree to check if the values have been retrieved
-		printFileStructure(tt, t);
+		Editor editor(metainfoTree, datasetTree);
 
-		Editor editor(t);
-
-		char c = 'n';
-		bool isFirstEditLoopEnter{ false };
+		// [NOTE] Stay in edit mode as long as needed
+		bool isFirstEditLoopEnter{false};
 		while (1) {
-			std::cout << ((!isFirstEditLoopEnter) ? "\nEnter edit mode? [y/n/q]\n" : "\nContinue in edit mode? [y/n]\n");
-			std::cin >> c;
-			if (c == 'q') {
-				delete t;
-				delete tt;
-				return 0;
-			}
+			std::cout << ((!isFirstEditLoopEnter) ? "\nEnter edit mode? [y/n/q]\n" : "\nContinue in edit mode? [y/n/q]\n");
+			isFirstEditLoopEnter = true;
+			char c = doYouWantToExit(datasetTree, metainfoTree);
 			if (c != 'y')
 				break;
-			std::cout << "Enter the tag id of node to be edited (i.e. 0123 0FFF, q to quit): ";
-			std::string id;
-			Uint16 g, e;
-			std::cin >>std::hex >> g >> e;
-			if (g == 'q') {
-				delete t;
-				delete tt;
-				return 0;
-			}
-			std::cout << "Enter the new value of the node: ";
-			std::string value;
-			std::cin >> value;
-			DcmTag tag(g, e);
-			std::cout << tag.getTagName() <<'\n';
-			editor.update(tag, value.c_str());
+
+			std::pair<std::vector<DcmTag>, std::vector<int>> pathToNode = fetchPathToNode();
+			editor.update(pathToNode.first, pathToNode.second, fetchNewValue().c_str());
+			printPathToAffectedNode(pathToNode);
 		}
 
-		//[NOTE] Check updated tree structure
-		printFileStructure(tt, t);
 		std::cout << "\nSave modifications to default path? [y/n/q]\n";
-		std::cin >> c;
-		if (c == 'q') {
-			delete t;
-			delete tt;
-			return 0;
-		}
+		char c = doYouWantToExit(datasetTree, metainfoTree);
 		if (c != 'y')
 			continue;
-		std::string defaultPath = "C:/Users/user/Desktop/output.dcm";
 		Writer writer;
-		writer.save(std::move(editor.getFileFormat()), fin.getMetaInfo(), defaultPath.c_str());
-		delete t;
-		delete tt;
+		writer.save(std::move(editor.getFileFormat()), defaultPath);
+
+		// [NOTE] release acquired resources
+		// [NOTE] end of one pass in normal execution
+		cleanup(datasetTree, metainfoTree);
 	}
-	f.close();
 	return 0;
 }
 
-void printFileStructure(Tree* miset, Tree* dset)
+static Reader initReader() {
+	char index = 0;
+	for (int i = 0; i < sizeof(paths) / sizeof(const char*); ++i)
+		std::cout << i << ". " << paths[i] << '\n';
+	std::cout << "\nInsert a number between 0 and " << min(9, sizeof(paths) / sizeof(const char*) - 1) << " or q: ";
+	index = doYouWantToExit(nullptr, nullptr);
+	if (index < '0' || index > '9')
+		return 0;
+	return Reader(paths[(unsigned int)index - '0']);
+}
+
+static Tree* buildTree(Reader& r, CONTAINER_TYPE c) {
+	Tree* t = nullptr;
+	switch (c)
+	{
+	case DATASET:
+		t = r.loadDataset();
+		r.retrieveDataset(t);
+		return;
+	case METAINFO:
+		t = r.loadMetainfo();
+		r.retrieveMetainfo(t);
+		return;
+	}
+	std::cerr << "Tree was not initialized!\n";
+	return t;
+}
+
+/**
+ * If the node is at depth 1, just read its tag and expect a 0x0 (end of sequence).
+ * If the node is part of a sequence, read the sequence tag, read the item tag and the item number, i.e. 0 -> n.
+ * (The item number input is required to differentiate between items because they all have the same tag.)
+ * \return a pair of arrays, the first one holding a tag path, and the second one holding the item numbers for their corresponding sequence.
+ */
+static std::pair<std::vector<DcmTag>, std::vector<int>> fetchPathToNode() {
+	std::cout << "Enter the tag sequence id of node to be edited (i.e. 0x0123 0x0FFF, 0xfffe 0xe0000, ...) and enter 0x0 when done\n";
+	Uint16 g, e;
+	std::vector<DcmTag> tags;
+	std::vector<int> itemNos;
+	while (std::cin >> std::hex >> g) {
+		if (g == 0)
+			break;
+		std::cin >> std::hex >> e;
+		tags.push_back(DcmTag(g, e));
+		if (g == 0xfffe && e == 0xe000) {
+			std::cout << "Which item (0, 1, 2, 3, ...): ";
+			int itemNo{ 0 };
+			std::cin >> itemNo;
+			itemNos.push_back(itemNo);
+		}
+	}
+	return { tags, itemNos };
+}
+
+static std::string fetchNewValue() {
+	std::cout << "Enter the new value of the node:\n";
+	std::cin.get();
+	std::string value(200, '\0');
+	std::cin.getline(&value[0], value.size());
+	return value;
+}
+
+static void printPathToAffectedNode(std::pair<std::vector<DcmTag>, std::vector<int>> path) {
+	std::vector<DcmTag> tags = path.first;
+	std::vector<int> itemNos = path.second;
+	std::cout << "Path to affected node: ";
+	int i = 0;
+	for (auto& tag : tags) {
+		std::cout << tag.getTagName() << ' ';
+		if (tag == DCM_ItemTag)
+			std::cout << "Item #" << itemNos.at(i) << ' ';
+		std::cout  << "-> ";
+	}
+	std::cout << '\n';
+}
+
+static void printFileStructure(Tree* miset, Tree* dset)
 {
 	std::cout << "----------------METAINFORMATION----------------\n";
 	miset->preOrderTraversalPrint();
@@ -104,12 +155,24 @@ void printFileStructure(Tree* miset, Tree* dset)
 	std::cout << "------------------DATASET END------------------\n";
 }
 
-/**
- * Metoda de citit value in metainfo -> findAndGetOFStringArray() functioneaza pe VR in DcmDataset, dar nu si pe VR-uri identice in DcmMetainfo (?).
- * Crearea de dataset pare ca merge perfect, dar la .saveFile() in writer crapa. Credeam ca sunt generate de compression method, i.e. jpeg, dar crapa si online_test
- */
+static char doYouWantToExit(Tree* t1, Tree* t2) {
+	char c = 'n';
+	std::cin >> c;
+	if (c == 'q')
+		exit(t1, t2);
+	return c;
+}
 
+static void cleanup(Tree* t1, Tree* t2)
+{
+	if(t1)
+		delete t1;
+	if(t2)
+		delete t2;
+}
 
-
-
-
+static void exit(Tree* t1, Tree* t2)
+{
+	cleanup(t1, t2);
+	std::exit(0);
+}

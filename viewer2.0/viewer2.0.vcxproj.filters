@@ -50,23 +50,6 @@
     <ClInclude Include="Editor.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="main.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="online_test.dcm">
-      <Filter>Resource Files</Filter>
-    </None>
-    <None Include="test3.dcm">
-      <Filter>Resource Files</Filter>
-    </None>
-    <None Include="more_items_in_sq.dcm">
-      <Filter>Resource Files</Filter>
-    </None>
-    <None Include="gura.dcm">
-      <Filter>Resource Files</Filter>
-    </None>
   </ItemGroup>
   <ItemGroup>
     <Text Include="dump_res.txt">
