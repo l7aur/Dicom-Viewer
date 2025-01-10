@@ -7,6 +7,10 @@ const char* paths[] = {
 	"dicoms/public/test2.dcm",
 	"dicoms/public/test3.dcm",
 	"dicoms/public/test4.dcm",
+	"dicoms/private/test1.dcm",
+	"dicoms/private/test2.dcm",
+	"dicoms/private/test3.dcm",
+	"dicoms/private/test4.dcm",
 	"C:/Users/user/Desktop/output.dcm" // default path to save file 
 };
 const char* defaultPath = "C:/Users/user/Desktop/output.dcm";
