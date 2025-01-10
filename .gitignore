@@ -230,7 +230,7 @@ _pkginfo.txt
 !?*.[Cc]ache/
 
 # Others
-dicoms/private/
+viewer2.0/dicoms/private
 ClientBin/
 ~$*
 *~
