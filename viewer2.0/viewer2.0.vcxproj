@@ -149,9 +149,6 @@
     <ClInclude Include="TreeNode.hpp" />
     <ClInclude Include="Writer.hpp" />
   </ItemGroup>
-  <ItemGroup>
-    <Text Include="dump_res.txt" />
-  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

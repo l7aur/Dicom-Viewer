@@ -3,13 +3,10 @@
 #include "Writer.hpp"
 
 const char* paths[] = {
-	"tests/test1.dcm",
-	"tests/test2.dcm",
-	"tests/test3.dcm",
-	"tests/test4.dcm",
-	"tests/more_items_in_sq.dcm",
-	"tests/online_test.dcm",
-	"tests/gura.dcm",
+	"dicoms/public/test1.dcm",
+	"dicoms/public/test2.dcm",
+	"dicoms/public/test3.dcm",
+	"dicoms/public/test4.dcm",
 	"C:/Users/user/Desktop/output.dcm" // default path to save file 
 };
 const char* defaultPath = "C:/Users/user/Desktop/output.dcm";
@@ -87,11 +84,11 @@ static Tree* buildTree(Reader& r, CONTAINER_TYPE c) {
 	case DATASET:
 		t = r.loadDataset();
 		r.retrieveDataset(t);
-		return;
+		return t;
 	case METAINFO:
 		t = r.loadMetainfo();
 		r.retrieveMetainfo(t);
-		return;
+		return t;
 	}
 	std::cerr << "Tree was not initialized!\n";
 	return t;
